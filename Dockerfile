@@ -1,13 +1,34 @@
-FROM alpine:latest
-MAINTAINER cSphere <docker@csphere.cn>
+FROM ubuntu
 
-ENV GLIBC_PKG_VERSION=2.23-r1
+# update time 
+RUN echo "Asia/Shanghai" > /etc/timezone
+RUN dpkg-reconfigure -f noninteractive tzdata
 
-RUN apk add --no-cache --update-cache curl ca-certificates bash && \
-  curl -Lo /etc/apk/keys/andyshinn.rsa.pub "https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_PKG_VERSION}/andyshinn.rsa.pub" && \
-  curl -Lo glibc-${GLIBC_PKG_VERSION}.apk "https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_PKG_VERSION}/glibc-${GLIBC_PKG_VERSION}.apk" && \
-  curl -Lo glibc-bin-${GLIBC_PKG_VERSION}.apk "https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_PKG_VERSION}/glibc-bin-${GLIBC_PKG_VERSION}.apk" && \
-  curl -Lo glibc-i18n-${GLIBC_PKG_VERSION}.apk "https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_PKG_VERSION}/glibc-i18n-${GLIBC_PKG_VERSION}.apk" && \
-  apk add glibc-${GLIBC_PKG_VERSION}.apk glibc-bin-${GLIBC_PKG_VERSION}.apk glibc-i18n-${GLIBC_PKG_VERSION}.apk
+RUN apt-get update
+RUN apt-get -y install wget bash vim && apt-get clean
 
-CMD ["/bin/bash"]
+# install java
+RUN wget http://119.254.110.32:8081/download/jdk1.7.0_60.tar.gz \
+   && tar -xvzf  jdk1.7.0_60.tar.gz \
+   && mv jdk1.7.0_60 /usr/share/ \
+   && rm -rf /usr/lib/jvm/java-1.7-openjdk \
+   && mkdir -p /usr/lib/jvm/ \
+   && ln -s /usr/share/jdk1.7.0_60 /usr/lib/jvm/java-1.7-openjdk \
+   && rm -rf jdk1.7.0_60.tar.gz
+
+ENV JAVA_HOME /usr/lib/jvm/java-1.7-openjdk/
+
+RUN apt-get -y install git ant && apt-get clean
+
+# install zookeeper
+RUN mkdir /tmp/zookeeper
+WORKDIR /tmp/zookeeper
+RUN git clone https://github.com/apache/zookeeper.git .
+RUN git checkout release-3.5.1-rc2
+RUN ant jar
+RUN cp /tmp/zookeeper/conf/zoo_sample.cfg \
+    /tmp/zookeeper/conf/zoo.cfg
+RUN echo "standaloneEnabled=false" >> /tmp/zookeeper/conf/zoo.cfg
+RUN echo "dynamicConfigFile=/tmp/zookeeper/conf/zoo.cfg.dynamic" >> /tmp/zookeeper/conf/zoo.cfg
+ADD zk-init.sh /usr/local/bin/
+ENTRYPOINT ["/usr/local/bin/zk-init.sh"]
